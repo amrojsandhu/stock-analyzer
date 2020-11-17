@@ -10,10 +10,18 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.scaler.mohit.stock.analyzer.pojo.Candle;
@@ -61,7 +69,7 @@ public class StockAnalyzer {
             tiingoCandleList.add(tiingoCandle);
         }
 
-        Collections.sort(tiingoCandleList, Comparator.comparing(Candle::getOpen));
+        Collections.sort(tiingoCandleList, Comparator.comparing(Candle::getClose));
 
         List<String> stocks = new ArrayList<>();
         for (TiingoCandle tiingoCandle : tiingoCandleList) {
@@ -81,8 +89,29 @@ public class StockAnalyzer {
      *  NOTE: Use Tiingo API for stock prices on specific date.
      *      If the price is not available on given endDate, consider price for a day before endDate.
      */
-    public static List<AnnualizedReturn> getAnnualisedReturnsOnStocks(String fileName, String endDate) {
-        return Collections.emptyList();
+    public static List<AnnualizedReturn> getAnnualisedReturnsOnStocks(String fileName, String endDate) throws IOException {
+
+        int years = 1;
+        Trade[] tradeList = readTradesFromFile(fileName);
+
+        List<AnnualizedReturn> annualisedReturns = new ArrayList<>();
+
+        for (Trade trade : tradeList) {
+            TiingoCandle tiingoCandle1 = getStockPriceFromAPI(trade.getSymbol(), subtractDaysFromDate(endDate, 365 * years));
+            TiingoCandle tiingoCandle2 = getStockPriceFromAPI(trade.getSymbol(), endDate);
+
+            double purchasePrice = tiingoCandle1.getClose();
+            double currentPrice = tiingoCandle2.getClose();
+
+            double simpleReturn = (currentPrice - purchasePrice) / purchasePrice;
+            double annualReturn = Math.pow((1 + simpleReturn), years) - 1;
+
+            annualisedReturns.add(new AnnualizedReturn(trade.getSymbol(), simpleReturn, annualReturn));
+        }
+
+        Collections.sort(annualisedReturns, Comparator.comparing(AnnualizedReturn::getAnnualizedReturn).reversed());
+
+        return annualisedReturns;
     }
 
     public static void main(String[] args) {
@@ -101,10 +130,12 @@ public class StockAnalyzer {
         StringBuilder urlBuilder = new StringBuilder("https://api.tiingo.com/tiingo/daily/");
         urlBuilder
                 .append(stock)
-                .append("/prices?startDate=").append(date)
+                .append("/prices?startDate=").append(subtractDaysFromDate(date, 3))
                 .append("&endDate=").append(date)
                 .append("&token=")
                 .append("770b8b195130ad5c76405b84651f6455d31f464b");
+
+//        System.out.println("Hitting API with URL:: " + urlBuilder);
 
         URL url = new URL(urlBuilder.toString());
 
@@ -124,6 +155,18 @@ public class StockAnalyzer {
         ObjectMapper mapper = new ObjectMapper();
         TiingoCandle[] tiingoCandle = mapper.readValue(responseBuilder.toString(), TiingoCandle[].class);
 
-        return tiingoCandle[0];
+        return tiingoCandle[tiingoCandle.length - 1];
+    }
+
+    private static String subtractDaysFromDate(String strDate, int days) {
+        Calendar cal = Calendar.getInstance();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH);
+        try {
+            cal.setTime(sdf.parse(strDate));
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        cal.add(Calendar.DATE, -1 * days);
+        return sdf.format(cal.getTime());
     }
 }
