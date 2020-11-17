@@ -2,7 +2,9 @@ package com.scaler.mohit.stock.analyzer.pojo;
 
 import lombok.Data;
 
-import java.time.LocalDate;
+import java.util.Date;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 /**
  * @author mohit@interviewbit.com on 09/11/20
@@ -17,5 +19,6 @@ public class Trade {
     private String symbol;
     private int quantity;
     private TradeType tradeType;
-    private LocalDate purchaseDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private Date purchaseDate;
 }
